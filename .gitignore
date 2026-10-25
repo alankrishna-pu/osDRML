@@ -1,0 +1,5 @@
+# Binaries and build artifacts
+*.exe
+*.o
+deadlock_server
+deadlock_server.exe
