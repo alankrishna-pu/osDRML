@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deadlock Recovery with Minimal Work Loss</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: #ffffff;
+      color: #222222;
+      font-family: Calibri, 'Segoe UI', Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      padding: 24px;
+    }
+
+    .container {
+      max-width: 1160px;
+      margin: 0 auto;
+    }
+
+    header {
+      border-bottom: 2px solid #333333;
+      padding-bottom: 12px;
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #111111;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #555555;
+    }
+
+    section {
+      margin-bottom: 28px;
+    }
+
+    h2 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #222222;
+      border-bottom: 1px solid #cccccc;
+      padding-bottom: 6px;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .limits-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-bottom: 14px;
+      align-items: center;
+      background-color: #fafafa;
+      padding: 10px 14px;
+      border: 1px solid #dcdcdc;
+    }
+
+    .limit-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .limit-item label {
+      font-weight: 600;
+      color: #333333;
+    }
+
+    input[type="number"], input[type="text"] {
+      font-family: inherit;
+      font-size: 13px;
+      padding: 5px 8px;
+      border: 1px solid #cccccc;
+      background-color: #ffffff;
+      color: #111111;
+    }
+
+    input[type="number"] {
+      width: 90px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+
+    th, td {
+      border: 1px solid #d0d0d0;
+      padding: 6px 8px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #e6e6e6;
+      color: #222222;
+      font-weight: 600;
+    }
+
+    .process-table input[type="text"], .process-table input[type="number"] {
+      width: 100%;
+      border: 1px solid #cccccc;
+      padding: 4px 6px;
+    }
+
+    .btn {
+      font-family: inherit;
+      font-size: 13px;
+      padding: 6px 14px;
+      cursor: pointer;
+      border: 1px solid #cccccc;
+      background-color: #f5f5f5;
+      color: #222222;
+      transition: background-color 0.1s;
+    }
+
+    .btn:hover {
+      background-color: #ebebeb;
+    }
+
+    .btn-primary {
+      background-color: #111111;
+      color: #ffffff;
+      border-color: #111111;
+      font-weight: 600;
+    }
+
+    .btn-primary:hover {
+      background-color: #333333;
+    }
+
+    .btn-remove {
+      background: none;
+      border: 1px solid #ccc;
+      color: #555;
+      font-weight: bold;
+      width: 24px;
+      height: 24px;
+      line-height: 20px;
+      text-align: center;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    .btn-remove:hover {
+      background-color: #e0e0e0;
+      color: #000;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .hint-text {
+      font-size: 12px;
+      color: #666666;
+      margin-top: 6px;
+    }
+
+    #error-message {
+      display: none;
+      color: #b30000;
+      font-weight: 600;
+      margin-top: 10px;
+      padding: 8px 12px;
+      background-color: #fff0f0;
+      border: 1px solid #ffcccc;
+    }
+
+    /* Result Section */
+    .status-bar {
+      padding: 10px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      border: 1px solid #d0d0d0;
+      background-color: #f7f7f7;
+    }
+
+    .status-deadlock {
+      background-color: #f0f0f0;
+      border-color: #888888;
+      color: #111111;
+    }
+
+    .status-clear {
+      background-color: #fafafa;
+      border-color: #cccccc;
+      color: #2b6e2f;
+    }
+
+    .result-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 860px) {
+      .result-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      border: 1px solid #d0d0d0;
+      padding: 14px;
+      background-color: #ffffff;
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      color: #333333;
+      border-bottom: 1px solid #e0e0e0;
+      padding-bottom: 4px;
+    }
+
+    .graph-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 380px;
+      background-color: #fafafa;
+      border: 1px solid #e8e8e8;
+      overflow: hidden;
+    }
+
+    .graph-legend {
+      display: flex;
+      gap: 16px;
+      margin-top: 8px;
+      font-size: 12px;
+      color: #555555;
+    }
+
+    .legend-box {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      vertical-align: middle;
+      margin-right: 4px;
+    }
+
+    .plan-metric {
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px dashed #e8e8e8;
+      padding-bottom: 4px;
+    }
+
+    .plan-metric-label {
+      font-weight: 600;
+      color: #444444;
+    }
+
+    .plan-metric-value {
+      font-family: Consolas, monospace;
+      color: #111111;
+    }
+
+    .highlight-row {
+      background-color: #eeeeee;
+      font-weight: 600;
+    }
+
+    .tag-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      font-size: 11px;
+      font-weight: bold;
+      border: 1px solid #999;
+      background-color: #fff;
+    }
+
+    .tag-yes {
+      background-color: #e6e6e6;
+      border-color: #666;
+    }
+
+    .tag-no {
+      background-color: #f7f7f7;
+      border-color: #bbb;
+      color: #777;
+    }
+
+    footer {
+      border-top: 1px solid #cccccc;
+      padding-top: 12px;
+      margin-top: 36px;
+      font-size: 12px;
+      color: #666666;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>Deadlock Recovery with Minimal Work Loss</h1>
+      <div class="subtitle">Operating Systems Project | IASWE204 | All actions are simulated; no real processes are terminated.</div>
+    </header>
+
+    <!-- SECTION 1: INPUT SPECIFICATION -->
+    <section id="input-section">
+      <h2>1. Process & Resource Configuration</h2>
+
+      <div class="limits-bar">
+        <div class="limit-item">
+          <label for="maxCost">Max recovery cost:</label>
+          <input type="number" id="maxCost" value="60" min="0">
+        </div>
+        <div class="limit-item">
+          <label for="maxVictims">Max processes terminated:</label>
+          <input type="number" id="maxVictims" value="2" min="0">
+        </div>
+      </div>
+
+      <table class="process-table" id="processTable">
+        <thead>
+          <tr>
+            <th style="width: 14%;">Process</th>
+            <th style="width: 14%;">Completed work</th>
+            <th style="width: 14%;">Restart cost</th>
+            <th style="width: 12%;">Priority</th>
+            <th style="width: 22%;">Holds</th>
+            <th style="width: 20%;">Waits for</th>
+            <th style="width: 4%; text-align: center;"></th>
+          </tr>
+        </thead>
+        <tbody id="processTableBody">
+          <!-- Populated by JavaScript -->
+        </tbody>
+      </table>
+
+      <div class="hint-text">
+        Resource names are comma-separated (e.g. R1,R2) or '-' for none. Higher priority values indicate higher process importance. Maximum 12 processes and 16 resources.
+      </div>
+
+      <div class="btn-group">
+        <button class="btn btn-primary" id="btnDetect" onclick="runAnalysis()">Detect and recover</button>
+        <button class="btn" onclick="addProcessRow()">Add process</button>
+        <button class="btn" onclick="loadDemoData()">Load demo data</button>
+        <button class="btn" onclick="clearTable()">Clear</button>
+      </div>
+
+      <div id="error-message"></div>
+    </section>
+
+    <!-- SECTION 2: DETECTION & RECOVERY RESULT -->
+    <section id="result-section" style="display: none;">
+      <h2>2. Deadlock Detection & Selected Recovery</h2>
+
+      <div id="statusBar" class="status-bar"></div>
+
+      <div class="result-grid">
+        <!-- WAIT-FOR GRAPH CARD -->
+        <div class="card">
+          <div class="card-title">Wait-For Graph (WFG)</div>
+          <div class="graph-container">
+            <svg id="wfgSvg" width="460" height="380" viewBox="0 0 460 380"></svg>
+            <div class="graph-legend">
+              <div><span class="legend-box" style="background: #dcdcdc; border: 2px solid #222;"></span> Deadlocked node</div>
+              <div><span class="legend-box" style="background: #ffffff; border: 1px solid #888;"></span> Active / Non-deadlocked</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RECOVERY PLAN CARD -->
+        <div class="card">
+          <div class="card-title">Selected Recovery Plan (Optimal Feasible)</div>
+          <div id="bestPlanDetails" style="padding-top: 6px;">
+            <!-- Populated by JavaScript -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 3: CANDIDATE PLANS -->
+    <section id="candidate-section" style="display: none;">
+      <h2>3. Candidate Recovery Plans (Minimal Subsets)</h2>
+      <div style="margin-bottom: 8px; font-size: 13px; color: #555;" id="candidateCountNote"></div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 10%;">Rank</th>
+            <th style="width: 25%;">Victims</th>
+            <th style="width: 18%;">Work-loss cost</th>
+            <th style="width: 18%;">Processes terminated</th>
+            <th style="width: 17%;">Resources released</th>
+            <th style="width: 12%;">Within limits</th>
+          </tr>
+        </thead>
+        <tbody id="plansTableBody">
+          <!-- Populated by JavaScript -->
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION 4: STRATEGY COMPARISON -->
+    <section id="comparison-section" style="display: none;">
+      <h2>4. Recovery Strategy Comparison</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 32%;">Strategy</th>
+            <th style="width: 22%;">Victims</th>
+            <th style="width: 16%;">Cost</th>
+            <th style="width: 18%;">Processes terminated</th>
+            <th style="width: 12%;">Within limits</th>
+          </tr>
+        </thead>
+        <tbody id="comparisonTableBody">
+          <!-- Populated by JavaScript -->
+        </tbody>
+      </table>
+      <div style="font-size: 12px; color: #666; margin-top: 6px;" id="subsetsEvaluatedNote"></div>
+    </section>
+
+    <footer>
+      Reg. No: 25MIS0108, 25MIS0223
+    </footer>
+  </div>
+
+  <script>
+    const DEMO_DATA = {
+      maxCost: 60,
+      maxVictims: 2,
+      processes: [
+        { name: "P1", completed: 12, restart: 8,  priority: 4, holds: "R1",    waits: "R2" },
+        { name: "P2", completed: 30, restart: 15, priority: 1, holds: "R2",    waits: "R3" },
+        { name: "P3", completed: 20, restart: 10, priority: 5, holds: "R3",    waits: "R1,R4" },
+        { name: "P4", completed: 14, restart: 8,  priority: 3, holds: "R4",    waits: "R5" },
+        { name: "P5", completed: 35, restart: 15, priority: 2, holds: "R5",    waits: "R3" },
+        { name: "P6", completed: 6,  restart: 6,  priority: 3, holds: "R6",    waits: "R1" }
+      ]
+    };
+
+    function clearTable() {
+      const tbody = document.getElementById("processTableBody");
+      tbody.innerHTML = "";
+      addProcessRow();
+      hideError();
+    }
+
+    function addProcessRow(data) {
+      const tbody = document.getElementById("processTableBody");
+      const row = document.createElement("tr");
+
+      const name = data ? data.name : ("P" + (tbody.children.length + 1));
+      const completed = data !== undefined ? data.completed : 10;
+      const restart = data !== undefined ? data.restart : 5;
+      const priority = data !== undefined ? data.priority : 1;
+      const holds = data ? data.holds : "-";
+      const waits = data ? data.waits : "-";
+
+      row.innerHTML = `
+        <td><input type="text" class="proc-name" value="${escapeHtml(name)}" maxlength="15"></td>
+        <td><input type="number" class="proc-completed" value="${completed}" min="0"></td>
+        <td><input type="number" class="proc-restart" value="${restart}" min="0"></td>
+        <td><input type="number" class="proc-priority" value="${priority}" min="0"></td>
+        <td><input type="text" class="proc-holds" value="${escapeHtml(holds)}" placeholder="R1,R2 or -"></td>
+        <td><input type="text" class="proc-waits" value="${escapeHtml(waits)}" placeholder="R3 or -"></td>
+        <td style="text-align: center;"><button type="button" class="btn-remove" onclick="removeRow(this)">&times;</button></td>
+      `;
+      tbody.appendChild(row);
+    }
+
+    function removeRow(btn) {
+      const tbody = document.getElementById("processTableBody");
+      if (tbody.children.length > 1) {
+        btn.closest("tr").remove();
+      } else {
+        showError("At least one process row is required.");
+      }
+    }
+
+    function loadDemoData() {
+      document.getElementById("maxCost").value = DEMO_DATA.maxCost;
+      document.getElementById("maxVictims").value = DEMO_DATA.maxVictims;
+      const tbody = document.getElementById("processTableBody");
+      tbody.innerHTML = "";
+      DEMO_DATA.processes.forEach(p => addProcessRow(p));
+      hideError();
+    }
+
+    function escapeHtml(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function showError(msg) {
+      const errBox = document.getElementById("error-message");
+      errBox.textContent = msg;
+      errBox.style.display = "block";
+    }
+
+    function hideError() {
+      const errBox = document.getElementById("error-message");
+      errBox.style.display = "none";
+    }
+
+    function buildInputPayload() {
+      const maxCost = document.getElementById("maxCost").value.trim();
+      const maxVictims = document.getElementById("maxVictims").value.trim();
+
+      if (maxCost === "" || isNaN(maxCost) || parseInt(maxCost, 10) < 0) {
+        throw new Error("Max recovery cost must be a non-negative integer.");
+      }
+      if (maxVictims === "" || isNaN(maxVictims) || parseInt(maxVictims, 10) < 0) {
+        throw new Error("Max processes terminated must be a non-negative integer.");
+      }
+
+      let payload = `LIMITS ${parseInt(maxCost, 10)} ${parseInt(maxVictims, 10)}\n`;
+
+      const rows = document.querySelectorAll("#processTableBody tr");
+      if (rows.length === 0) {
+        throw new Error("No processes defined in table.");
+      }
+
+      rows.forEach(r => {
+        const name = r.querySelector(".proc-name").value.trim();
+        const completed = r.querySelector(".proc-completed").value.trim();
+        const restart = r.querySelector(".proc-restart").value.trim();
+        const priority = r.querySelector(".proc-priority").value.trim();
+        let holds = r.querySelector(".proc-holds").value.trim();
+        let waits = r.querySelector(".proc-waits").value.trim();
+
+        if (!name) throw new Error("Process name cannot be empty.");
+        if (completed === "" || isNaN(completed) || parseInt(completed, 10) < 0) {
+          throw new Error(`Completed work for process '${name}' must be non-negative.`);
+        }
+        if (restart === "" || isNaN(restart) || parseInt(restart, 10) < 0) {
+          throw new Error(`Restart cost for process '${name}' must be non-negative.`);
+        }
+        if (priority === "" || isNaN(priority) || parseInt(priority, 10) < 0) {
+          throw new Error(`Priority for process '${name}' must be non-negative.`);
+        }
+
+        if (!holds) holds = "-";
+        if (!waits) waits = "-";
+
+        payload += `${name} ${parseInt(completed, 10)} ${parseInt(restart, 10)} ${parseInt(priority, 10)} ${holds} ${waits}\n`;
+      });
+
+      return payload;
+    }
+
+    async function runAnalysis() {
+      hideError();
+      let payload = "";
+      try {
+        payload = buildInputPayload();
+      } catch (err) {
+        showError(err.message);
+        return;
+      }
+
+      const btn = document.getElementById("btnDetect");
+      btn.disabled = true;
+      btn.textContent = "Analyzing...";
+
+      try {
+        const response = await fetch("/api/analyze", {
+          method: "POST",
+          headers: {
+            "Content-Type": "text/plain"
+          },
+          body: payload
+        });
+
+        if (!response.ok) {
+          throw new Error(`Server returned status ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (!data.ok) {
+          showError(data.error || "Analysis failed.");
+          return;
+        }
+
+        renderResults(data);
+      } catch (err) {
+        showError("Cannot connect to server. Ensure the C server is running on port 8080.");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Detect and recover";
+      }
+    }
+
+    function renderResults(data) {
+      document.getElementById("result-section").style.display = "block";
+      document.getElementById("candidate-section").style.display = "block";
+      document.getElementById("comparison-section").style.display = "block";
+
+      const statusBar = document.getElementById("statusBar");
+      const deadlockedProcesses = data.processes.filter(p => p.deadlocked).map(p => p.name);
+
+      if (data.deadlock) {
+        statusBar.className = "status-bar status-deadlock";
+        statusBar.textContent = `Deadlock detected among ${deadlockedProcesses.length} processes: ${deadlockedProcesses.join(", ")}`;
+      } else {
+        statusBar.className = "status-bar status-clear";
+        statusBar.textContent = "No deadlock detected in the system. All processes can proceed safely.";
+      }
+
+      renderWfgSvg(data);
+      renderBestPlanCard(data);
+      renderCandidatePlans(data);
+      renderComparisonTable(data);
+    }
+
+    function renderWfgSvg(data) {
+      const svg = document.getElementById("wfgSvg");
+      svg.innerHTML = "";
+
+      const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+      const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+      marker.setAttribute("id", "arrowhead");
+      marker.setAttribute("viewBox", "0 0 10 10");
+      marker.setAttribute("refX", "7");
+      marker.setAttribute("refY", "5");
+      marker.setAttribute("markerWidth", "6");
+      marker.setAttribute("markerHeight", "6");
+      marker.setAttribute("orient", "auto-start-reverse");
+
+      const arrowPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      arrowPath.setAttribute("d", "M 0 1.5 L 8 5 L 0 8.5 z");
+      arrowPath.setAttribute("fill", "#333333");
+      marker.appendChild(arrowPath);
+      defs.appendChild(marker);
+      svg.appendChild(defs);
+
+      const n = data.processes.length;
+      if (n === 0) return;
+
+      const cx = 230;
+      const cy = 190;
+      const radius = 130;
+      const nodeR = 22;
+
+      const positions = {};
+      data.processes.forEach((p, idx) => {
+        const theta = (2 * Math.PI * idx / n) - (Math.PI / 2);
+        const x = cx + radius * Math.cos(theta);
+        const y = cy + radius * Math.sin(theta);
+        positions[p.name] = { x, y, deadlocked: p.deadlocked };
+      });
+
+      /* Draw Edges first so nodes sit on top */
+      data.edges.forEach((edge, eIdx) => {
+        const fromPos = positions[edge.from];
+        const toPos = positions[edge.to];
+        if (!fromPos || !toPos) return;
+
+        const dx = toPos.x - fromPos.x;
+        const dy = toPos.y - fromPos.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist === 0) return;
+
+        const ux = dx / dist;
+        const uy = dy / dist;
+        const nx = -uy;
+        const ny = ux;
+
+        const sx = fromPos.x + ux * (nodeR + 2);
+        const sy = fromPos.y + uy * (nodeR + 2);
+        const ex = toPos.x - ux * (nodeR + 7);
+        const ey = toPos.y - uy * (nodeR + 7);
+
+        /* Curve offset */
+        const curveOffset = 22;
+        const mx = (sx + ex) / 2;
+        const my = (sy + ey) / 2;
+        const qx = mx + nx * curveOffset;
+        const qy = my + ny * curveOffset;
+
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", `M ${sx} ${sy} Q ${qx} ${qy} ${ex} ${ey}`);
+        path.setAttribute("fill", "none");
+        path.setAttribute("stroke", "#444444");
+        path.setAttribute("stroke-width", "1.6");
+        path.setAttribute("marker-end", "url(#arrowhead)");
+        svg.appendChild(path);
+
+        /* Resource label near quadratic midpoint */
+        const lx = 0.25 * sx + 0.5 * qx + 0.25 * ex;
+        const ly = 0.25 * sy + 0.5 * qy + 0.25 * ey;
+
+        const labelGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        text.textContent = edge.res;
+        text.setAttribute("x", lx);
+        text.setAttribute("y", ly + 3);
+        text.setAttribute("font-size", "10");
+        text.setAttribute("font-family", "Consolas, monospace");
+        text.setAttribute("font-weight", "bold");
+        text.setAttribute("fill", "#111111");
+        text.setAttribute("text-anchor", "middle");
+
+        const textWidth = Math.max(edge.res.length * 6 + 6, 18);
+        rect.setAttribute("x", lx - textWidth / 2);
+        rect.setAttribute("y", ly - 7);
+        rect.setAttribute("width", textWidth);
+        rect.setAttribute("height", 13);
+        rect.setAttribute("fill", "#ffffff");
+        rect.setAttribute("stroke", "#cccccc");
+        rect.setAttribute("stroke-width", "0.8");
+        rect.setAttribute("rx", "2");
+
+        labelGroup.appendChild(rect);
+        labelGroup.appendChild(text);
+        svg.appendChild(labelGroup);
+      });
+
+      /* Draw Nodes */
+      data.processes.forEach((p) => {
+        const pos = positions[p.name];
+        const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("cx", pos.x);
+        circle.setAttribute("cy", pos.y);
+        circle.setAttribute("r", nodeR);
+
+        if (p.deadlocked) {
+          circle.setAttribute("fill", "#dcdcdc");
+          circle.setAttribute("stroke", "#222222");
+          circle.setAttribute("stroke-width", "2.8");
+        } else {
+          circle.setAttribute("fill", "#ffffff");
+          circle.setAttribute("stroke", "#888888");
+          circle.setAttribute("stroke-width", "1.5");
+        }
+
+        const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        label.setAttribute("x", pos.x);
+        label.setAttribute("y", pos.y + 4);
+        label.setAttribute("text-anchor", "middle");
+        label.setAttribute("font-size", "12");
+        label.setAttribute("font-weight", "bold");
+        label.setAttribute("fill", "#111111");
+        label.textContent = p.name;
+
+        const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+        title.textContent = `${p.name}: Cost=${p.cost} (Comp=${p.completed}, Rest=${p.restart}), Pri=${p.priority}, Holds=[${p.holds.join(",")}], Waits=[${p.waits.join(",")}]`;
+        circle.appendChild(title);
+
+        g.appendChild(circle);
+        g.appendChild(label);
+        svg.appendChild(g);
+      });
+    }
+
+    function renderBestPlanCard(data) {
+      const container = document.getElementById("bestPlanDetails");
+
+      if (!data.deadlock) {
+        container.innerHTML = `
+          <div style="padding: 18px 0; color: #444;">
+            <p><strong>System State:</strong> Normal operation.</p>
+            <p style="margin-top: 6px;">No cycle exists in the Wait-For Graph. No process termination is required.</p>
+          </div>
+        `;
+        return;
+      }
+
+      if (!data.best) {
+        container.innerHTML = `
+          <div style="padding: 12px 0;">
+            <div style="font-weight: bold; color: #880000; margin-bottom: 8px;">No feasible plan within configured limits.</div>
+            <p style="font-size: 13px; color: #555;">
+              All minimal subsets that resolve the deadlock exceed either the maximum allowable work loss (${data.limits.maxCost}) or the maximum processes terminated (${data.limits.maxVictims}).
+            </p>
+            <p style="font-size: 13px; color: #555; margin-top: 6px;">
+              Consider raising limits or reviewing candidate plans below.
+            </p>
+          </div>
+        `;
+        return;
+      }
+
+      const p = data.best;
+      container.innerHTML = `
+        <div class="plan-metric">
+          <span class="plan-metric-label">Victims (Terminated):</span>
+          <span class="plan-metric-value" style="font-weight: bold;">${p.victims.join(", ")}</span>
+        </div>
+        <div class="plan-metric">
+          <span class="plan-metric-label">Estimated Work Loss (Cost):</span>
+          <span class="plan-metric-value">${p.cost} (Limit: &le; ${data.limits.maxCost})</span>
+        </div>
+        <div class="plan-metric">
+          <span class="plan-metric-label">Processes Terminated:</span>
+          <span class="plan-metric-value">${p.kills} (Limit: &le; ${data.limits.maxVictims})</span>
+        </div>
+        <div class="plan-metric">
+          <span class="plan-metric-label">Resources Released:</span>
+          <span class="plan-metric-value">${p.released.length > 0 ? p.released.join(", ") : "None"}</span>
+        </div>
+        <div class="plan-metric">
+          <span class="plan-metric-label">Recovery Status:</span>
+          <span class="plan-metric-value" style="font-weight: bold; color: #1b5e20;">Feasible &amp; Optimal</span>
+        </div>
+        <div style="margin-top: 10px; font-size: 12px; color: #666; line-height: 1.4;">
+          Terminating process <strong>${p.victims.join(", ")}</strong> breaks all circular wait cycles while incurring the minimal total work loss among all feasible candidate recovery plans.
+        </div>
+      `;
+    }
+
+    function renderCandidatePlans(data) {
+      const tbody = document.getElementById("plansTableBody");
+      tbody.innerHTML = "";
+      const note = document.getElementById("candidateCountNote");
+
+      if (!data.deadlock || data.plans.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #666; padding: 12px;">No recovery plans needed (no deadlock detected).</td></tr>`;
+        note.textContent = "";
+        return;
+      }
+
+      note.textContent = `Showing ${data.plans.length} minimal recovery plans evaluated across ${data.evaluated} process subsets:`;
+
+      data.plans.forEach((plan, idx) => {
+        const isBest = data.best && (JSON.stringify(plan.victims) === JSON.stringify(data.best.victims));
+        const tr = document.createElement("tr");
+        if (isBest) {
+          tr.className = "highlight-row";
+        }
+
+        tr.innerHTML = `
+          <td>${idx + 1} ${isBest ? '<span class="tag-badge">Selected</span>' : ''}</td>
+          <td><strong>${plan.victims.join(" + ")}</strong></td>
+          <td>${plan.cost}</td>
+          <td>${plan.kills}</td>
+          <td>${plan.released.length > 0 ? plan.released.join(", ") : "-"}</td>
+          <td>
+            <span class="tag-badge ${plan.withinLimits ? 'tag-yes' : 'tag-no'}">
+              ${plan.withinLimits ? 'Yes' : 'No'}
+            </span>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderComparisonTable(data) {
+      const tbody = document.getElementById("comparisonTableBody");
+      tbody.innerHTML = "";
+      const note = document.getElementById("subsetsEvaluatedNote");
+
+      if (!data.deadlock) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #666; padding: 12px;">No comparison available (no deadlock detected).</td></tr>`;
+        note.textContent = "";
+        return;
+      }
+
+      /* Proposed Plan */
+      const propTr = document.createElement("tr");
+      propTr.className = "highlight-row";
+      if (data.best) {
+        propTr.innerHTML = `
+          <td><strong>Proposed (Minimum-Cost Feasible)</strong></td>
+          <td>${data.best.victims.join(" + ")}</td>
+          <td>${data.best.cost}</td>
+          <td>${data.best.kills}</td>
+          <td><span class="tag-badge tag-yes">Yes</span></td>
+        `;
+      } else {
+        propTr.innerHTML = `
+          <td><strong>Proposed (Minimum-Cost Feasible)</strong></td>
+          <td colspan="4" style="color: #777;">No feasible plan within limits</td>
+        `;
+      }
+      tbody.appendChild(propTr);
+
+      /* Baselines */
+      if (data.baselines) {
+        data.baselines.forEach(b => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>Baseline: ${escapeHtml(b.name)}</td>
+            <td>${b.plan.victims.join(" + ")}</td>
+            <td>${b.plan.cost}</td>
+            <td>${b.plan.kills}</td>
+            <td>
+              <span class="tag-badge ${b.plan.withinLimits ? 'tag-yes' : 'tag-no'}">
+                ${b.plan.withinLimits ? 'Yes' : 'No'}
+              </span>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      note.textContent = `Total process subsets evaluated by bitmask simulation: ${data.evaluated}.`;
+    }
+
+    /* Initialize with demo data and run initial analysis on load */
+    window.addEventListener("DOMContentLoaded", () => {
+      loadDemoData();
+      runAnalysis();
+    });
+  </script>
+</body>
+</html>
